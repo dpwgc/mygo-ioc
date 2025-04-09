@@ -3,11 +3,14 @@ package ioc
 import "reflect"
 
 type Bean struct {
-	tag     string
-	name    string
-	value   any
-	handles []Handle
-	methods map[string]reflect.Value
+	pkg            string
+	tag            string
+	name           string
+	value          any
+	handles        []Handle
+	reflectValue   reflect.Value
+	reflectType    reflect.Type
+	reflectMethods map[string]reflect.Value
 }
 
 func (b *Bean) Use(middlewares ...Handle) *Bean {
@@ -39,7 +42,7 @@ func (b *Bean) Call(name string, args ...any) Args {
 		for i := 0; i < len(ctx.In); i++ {
 			argValues = append(argValues, reflect.ValueOf(ctx.In[i]))
 		}
-		returnValues := b.methods[name].Call(argValues)
+		returnValues := b.reflectMethods[name].Call(argValues)
 		for i := 0; i < len(returnValues); i++ {
 			result = append(result, returnValues[i].Interface())
 		}

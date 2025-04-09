@@ -11,11 +11,15 @@ type Context struct {
 
 type Handle func(ctx *Context)
 
-func (c *Context) BeanName() string {
+func (c *Context) Package() string {
+	return c.bean.pkg
+}
+
+func (c *Context) Struct() string {
 	return c.bean.name
 }
 
-func (c *Context) BeanTag() string {
+func (c *Context) Tag() string {
 	return c.bean.tag
 }
 
