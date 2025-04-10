@@ -1,7 +1,6 @@
 package ioc
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 )
@@ -80,7 +79,6 @@ func (c *Container) getBean(pkg, stu string) *Bean {
 
 func (c *Container) autowired(val reflect.Value) {
 	typ := val.Type()
-	fmt.Println("au", typ)
 	for i := 0; i < val.NumField(); i++ {
 		field := val.Field(i)
 		fieldType := typ.Field(i)
