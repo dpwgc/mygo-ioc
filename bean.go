@@ -3,7 +3,6 @@ package ioc
 import "reflect"
 
 type Bean struct {
-	pkg            string
 	tag            string
 	name           string
 	value          any

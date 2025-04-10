@@ -1,23 +1,24 @@
 package ioc
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 )
 
 type Container struct {
 	beans       []*Bean
+	implsByName map[string]reflect.Value
 	beansByName map[string]*Bean
 	beansByTag  map[string][]*Bean
-	beansByPkg  map[string][]*Bean
 	handles     []Handle
 }
 
 func NewContainer() *Container {
 	return &Container{
+		implsByName: make(map[string]reflect.Value),
 		beansByName: make(map[string]*Bean),
 		beansByTag:  make(map[string][]*Bean),
-		beansByPkg:  make(map[string][]*Bean),
 	}
 }
 
@@ -26,7 +27,12 @@ func (c *Container) Use(middlewares ...Handle) *Container {
 	return c
 }
 
-func (c *Container) Register(beans ...any) *Container {
+func (c *Container) RegisterImplement(name string, impl any) *Container {
+	c.implsByName[name] = reflect.ValueOf(impl)
+	return c
+}
+
+func (c *Container) RegisterBeans(beans ...any) *Container {
 	for _, bean := range beans {
 		c.autowired(reflect.ValueOf(bean).Elem())
 	}
@@ -45,13 +51,8 @@ func (c *Container) GetBeansByTag(tag string) []*Bean {
 	return c.beansByTag[tag]
 }
 
-func (c *Container) GetBeansByPackage(pkg string) []*Bean {
-	return c.beansByPkg[pkg]
-}
-
-func (c *Container) addBean(pkg, stu, tag string, rv reflect.Value, rt reflect.Type) {
-	key := pkg + "." + stu
-	if c.beansByName[key] != nil {
+func (c *Container) addBean(name, tag string, rv reflect.Value, rt reflect.Type) {
+	if c.beansByName[name] != nil {
 		return
 	}
 	numMethod := rt.NumMethod()
@@ -61,8 +62,7 @@ func (c *Container) addBean(pkg, stu, tag string, rv reflect.Value, rt reflect.T
 	}
 	bean := &Bean{
 		tag:            tag,
-		name:           stu,
-		pkg:            pkg,
+		name:           name,
 		value:          rv.Interface(),
 		handles:        append([]Handle{}, c.handles...),
 		reflectValue:   rv,
@@ -70,9 +70,8 @@ func (c *Container) addBean(pkg, stu, tag string, rv reflect.Value, rt reflect.T
 		reflectMethods: methods,
 	}
 	c.beans = append(c.beans, bean)
-	c.beansByName[key] = bean
+	c.beansByName[name] = bean
 	c.beansByTag[tag] = append(c.beansByTag[tag], bean)
-	c.beansByPkg[pkg] = append(c.beansByPkg[pkg], bean)
 }
 
 func (c *Container) getBean(pkg, stu string) *Bean {
@@ -81,25 +80,38 @@ func (c *Container) getBean(pkg, stu string) *Bean {
 
 func (c *Container) autowired(val reflect.Value) {
 	typ := val.Type()
+	fmt.Println("au", typ)
 	for i := 0; i < val.NumField(); i++ {
 		field := val.Field(i)
 		fieldType := typ.Field(i)
 		switch field.Kind() {
 		case reflect.Ptr:
-			tag := fieldType.Tag.Get("autowired")
-			if field.CanSet() && field.IsNil() && tag != "" {
+		case reflect.Interface:
+			autowired := fieldType.Tag.Get("autowired")
+			if field.CanSet() && field.IsNil() && autowired != "" {
 				path := fieldType.Type.String()
 				items := strings.Split(strings.ReplaceAll(path, "*", ""), ".")
 				bean := c.getBean(items[0], items[1])
 				if bean != nil {
 					field.Set(bean.reflectValue)
 				} else {
-					rv := reflect.New(fieldType.Type.Elem())
-					field.Set(rv)
-					c.addBean(items[0], items[1], tag, rv, fieldType.Type)
+					qualifier := fieldType.Tag.Get("qualifier")
+					if qualifier != "" {
+						rv := c.implsByName[qualifier]
+						field.Set(rv)
+						c.addBean(qualifier, autowired, rv, fieldType.Type)
+					} else {
+						rv := reflect.New(fieldType.Type.Elem())
+						field.Set(rv)
+						c.addBean(items[0]+"."+items[1], autowired, rv, fieldType.Type)
+					}
 				}
 			}
-			c.autowired(field.Elem())
+			if field.Kind() == reflect.Interface {
+				c.autowired(field.Elem().Elem())
+			} else {
+				c.autowired(field.Elem())
+			}
 		case reflect.Struct:
 			c.autowired(field)
 		}
