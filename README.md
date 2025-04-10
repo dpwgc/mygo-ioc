@@ -6,7 +6,7 @@
 
 ### 示例代码
 
-#### 完整版 -> `demo/main.go`
+#### 完整版 -> `./demo`
 
 ```go
 package main
@@ -14,68 +14,99 @@ package main
 import (
 	"fmt"
 	ioc "mygo-ioc"
-	"mygo-ioc/demo/mapper"
-	"mygo-ioc/demo/repository"
-	"mygo-ioc/demo/service"
 )
+
+// ===== Base Demo 程序 =====
 
 func main() {
 
 	// 新建一个容器
 	container := ioc.NewContainer()
 
-	// 将 DemoService 注册到容器
-	var demoService service.DemoService
-	container.Register(&demoService)
+	// 注册两个 Repository 的接口实现
+	container.RegisterImplement("FirstRepository", new(FirstRepository))
+	container.RegisterImplement("SecondRepository", new(SecondRepository))
 
-	fmt.Println("\n1.", "demoService.Print:")
+	// 将 DemoService 注册到 IOC 容器
+	var demoService DemoService
+	container.RegisterBeans(&demoService)
 
-	// 直接调用 demoService 的 Print 方法
-	demoService.Print("hello world")
+	fmt.Println("\n1.", "demoService.FirstInsert:")
+
+	// 直接调用 demoService 的 FirstInsert 方法
+	demoService.FirstInsert("hello world")
 
 	fmt.Println("\n2.", "GetBeans:")
 
 	// 遍历获取所有 Bean
 	for _, bean := range container.GetBeans() {
-		fmt.Println(bean.Tag(), bean.Name())
-	}
-
-	fmt.Println("\n3.", "GetBeansByPackage:")
-
-	// 遍历获取所有属于 service 包的 Bean
-	for _, bean := range container.GetBeansByPackage("service") {
-		fmt.Println(bean.Tag(), bean.Name())
+		fmt.Println(bean.Name())
 	}
 
 	fmt.Println("\n4.", "GetBeansByTag:")
 
-	// 遍历获取所有被标记为 mapper 的 Bean
-	for _, bean := range container.GetBeansByTag("mapper") {
-		fmt.Println(bean.Tag(), bean.Name())
-		// 调用 print 方法
-		bean.Any().(*mapper.DemoMapper).Print("hello world")
+	// 遍历获取所有被标记为 repository 的 Bean
+	for _, bean := range container.GetBeansByTag("repository") {
+		fmt.Println(bean.Name())
 	}
 
-	fmt.Println("\n5.", "GetBeanByName:")
+	fmt.Println("\n5.", "GetBeanByImplementName:")
+
+	// 根据接口实现名称获取指定 Bean
+	beanByImplName := container.GetBeanByName("SecondRepository").Any().(*SecondRepository)
+	// 调用 SecondRepository 的 Insert 方法
+	beanByImplName.Insert("hello world")
+
+	fmt.Println("\n6.", "GetBeanByStructName:")
 
 	// 根据结构体名称获取指定 Bean
-	beanByName := container.GetBeanByName("repository.DemoRepository").Any().(*repository.DemoRepository)
-	// 调用 print 方法
-	beanByName.Print("hello world")
+	beanByStructName := container.GetBeanByName("main.FirstRepository").Any().(*FirstRepository)
+	// 调用 main.FirstRepository 的 Insert 方法
+	beanByStructName.Insert("hello world")
+}
 
-	fmt.Println("\n6.", "use AOP")
+// ===== Service 服务 =====
 
-	// 新建一个带 AOP 的容器
-	containerWithAOP := ioc.NewContainer().Use(func(ctx *ioc.Context) {
-		fmt.Println(ctx.Package(), ctx.Struct(), "aop start")
-		ctx.Next()
-		fmt.Println(ctx.Package(), ctx.Struct(), "aop end")
-	})
+type DemoService struct {
+	// 使用 autowired 注解标记需要自动注入的字段
+	// 使用 qualifier 注解指定接口实现
+	FirstRepository  Repository `autowired:"repository" qualifier:"FirstRepository"`
+	SecondRepository Repository `autowired:"repository" qualifier:"SecondRepository"`
+	// 不使用接口，直接注入实例指针
+	FirstRepositoryImpl *FirstRepository `autowired:"repository"`
+}
 
-	// 将 DemoService 注册到 AOP 容器
-	containerWithAOP.Register(&service.DemoService{})
+func (s *DemoService) FirstInsert(text string) bool {
+	return s.FirstRepository.Insert(text)
+}
 
-	// 通过 Call 方法调用 DemoRepository 的 Print 方法
-	containerWithAOP.GetBeanByName("repository.DemoRepository").Call("Print", "hello world").Zero()
+func (s *DemoService) SecondInsert(text string) bool {
+	return s.SecondRepository.Insert(text)
+}
+
+func (s *DemoService) FirstImplInsert(text string) bool {
+	return s.FirstRepositoryImpl.Insert(text)
+}
+
+// ===== Repository 服务 =====
+
+type Repository interface {
+	Insert(text string) bool
+}
+
+type FirstRepository struct {
+}
+
+func (fr *FirstRepository) Insert(text string) bool {
+	fmt.Println("first insert:", text)
+	return true
+}
+
+type SecondRepository struct {
+}
+
+func (sr *SecondRepository) Insert(text string) bool {
+	fmt.Println("second insert:", text)
+	return true
 }
 ```

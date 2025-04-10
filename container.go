@@ -73,44 +73,42 @@ func (c *Container) addBean(name, tag string, rv reflect.Value, rt reflect.Type)
 	c.beansByTag[tag] = append(c.beansByTag[tag], bean)
 }
 
-func (c *Container) getBean(pkg, stu string) *Bean {
-	return c.GetBeanByName(pkg + "." + stu)
-}
-
 func (c *Container) autowired(val reflect.Value) {
 	typ := val.Type()
 	for i := 0; i < val.NumField(); i++ {
 		field := val.Field(i)
 		fieldType := typ.Field(i)
-		switch field.Kind() {
-		case reflect.Ptr:
-		case reflect.Interface:
+		kind := field.Kind()
+		if kind == reflect.Ptr || kind == reflect.Interface {
 			autowired := fieldType.Tag.Get("autowired")
 			if field.CanSet() && field.IsNil() && autowired != "" {
-				path := fieldType.Type.String()
-				items := strings.Split(strings.ReplaceAll(path, "*", ""), ".")
-				bean := c.getBean(items[0], items[1])
+				qualifier := fieldType.Tag.Get("qualifier")
+				key := qualifier
+				if key == "" {
+					path := fieldType.Type.String()
+					items := strings.Split(strings.ReplaceAll(path, "*", ""), ".")
+					key = items[0] + "." + items[1]
+				}
+				bean := c.GetBeanByName(key)
 				if bean != nil {
 					field.Set(bean.reflectValue)
 				} else {
-					qualifier := fieldType.Tag.Get("qualifier")
+					var rv reflect.Value
 					if qualifier != "" {
-						rv := c.implsByName[qualifier]
-						field.Set(rv)
-						c.addBean(qualifier, autowired, rv, fieldType.Type)
+						rv = c.implsByName[qualifier]
 					} else {
-						rv := reflect.New(fieldType.Type.Elem())
-						field.Set(rv)
-						c.addBean(items[0]+"."+items[1], autowired, rv, fieldType.Type)
+						rv = reflect.New(fieldType.Type.Elem())
 					}
+					field.Set(rv)
+					c.addBean(key, autowired, rv, fieldType.Type)
 				}
 			}
-			if field.Kind() == reflect.Interface {
+			if kind == reflect.Interface {
 				c.autowired(field.Elem().Elem())
 			} else {
 				c.autowired(field.Elem())
 			}
-		case reflect.Struct:
+		} else if kind == reflect.Struct {
 			c.autowired(field)
 		}
 	}
