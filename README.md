@@ -43,13 +43,6 @@ func main() {
 		fmt.Println(bean.Name())
 	}
 
-	fmt.Println("\n4.", "GetBeansByTag:")
-
-	// 遍历获取所有被标记为 repository 的 Bean
-	for _, bean := range container.GetBeansByTag("repository") {
-		fmt.Println(bean.Name())
-	}
-
 	fmt.Println("\n5.", "GetBeanByImplementName:")
 
 	// 根据接口实现名称获取指定 Bean
@@ -70,10 +63,12 @@ func main() {
 type DemoService struct {
 	// 使用 autowired 注解标记需要自动注入的字段
 	// 使用 qualifier 注解指定接口实现
-	FirstRepository  Repository `autowired:"repository" qualifier:"FirstRepository"`
-	SecondRepository Repository `autowired:"repository" qualifier:"SecondRepository"`
+	FirstRepository  Repository `qualifier:"FirstRepository"`
+	SecondRepository Repository `qualifier:"SecondRepository"`
 	// 不使用接口，直接注入实例指针
-	FirstRepositoryImpl *FirstRepository `autowired:"repository"`
+	FirstRepositoryImpl *FirstRepository
+	// 禁用自动注入
+	NoAutowired *FirstRepository `autowired:"false"`
 }
 
 func (s *DemoService) FirstInsert(text string) bool {

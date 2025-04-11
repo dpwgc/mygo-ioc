@@ -15,10 +15,6 @@ func (c *Context) Name() string {
 	return c.bean.name
 }
 
-func (c *Context) Tag() string {
-	return c.bean.tag
-}
-
 func (c *Context) Method() string {
 	return c.method
 }

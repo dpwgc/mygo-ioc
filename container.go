@@ -1,24 +1,30 @@
 package ioc
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 )
 
 type Container struct {
-	beans       []*Bean
-	implsByName map[string]reflect.Value
-	beansByName map[string]*Bean
-	beansByTag  map[string][]*Bean
-	handles     []Handle
+	defaultAutowired string
+	beans            []*Bean
+	implsByName      map[string]reflect.Value
+	beansByName      map[string]*Bean
+	handles          []Handle
 }
 
 func NewContainer() *Container {
 	return &Container{
-		implsByName: make(map[string]reflect.Value),
-		beansByName: make(map[string]*Bean),
-		beansByTag:  make(map[string][]*Bean),
+		defaultAutowired: "true",
+		implsByName:      make(map[string]reflect.Value),
+		beansByName:      make(map[string]*Bean),
 	}
+}
+
+func (c *Container) DefaultAutowired(v bool) *Container {
+	c.defaultAutowired = fmt.Sprintf("%v", v)
+	return c
 }
 
 func (c *Container) Use(middlewares ...Handle) *Container {
@@ -46,11 +52,7 @@ func (c *Container) GetBeans() []*Bean {
 	return c.beans
 }
 
-func (c *Container) GetBeansByTag(tag string) []*Bean {
-	return c.beansByTag[tag]
-}
-
-func (c *Container) addBean(name, tag string, rv reflect.Value, rt reflect.Type) {
+func (c *Container) addBean(name string, rv reflect.Value, rt reflect.Type) {
 	if c.beansByName[name] != nil {
 		return
 	}
@@ -60,7 +62,6 @@ func (c *Container) addBean(name, tag string, rv reflect.Value, rt reflect.Type)
 		methods[rt.Method(i).Name] = rv.Method(i)
 	}
 	bean := &Bean{
-		tag:            tag,
 		name:           name,
 		value:          rv.Interface(),
 		handles:        append([]Handle{}, c.handles...),
@@ -70,8 +71,12 @@ func (c *Container) addBean(name, tag string, rv reflect.Value, rt reflect.Type)
 	}
 	c.beans = append(c.beans, bean)
 	c.beansByName[name] = bean
-	c.beansByTag[tag] = append(c.beansByTag[tag], bean)
 }
+
+const (
+	True  = "true"
+	False = "false"
+)
 
 func (c *Container) autowired(val reflect.Value) {
 	typ := val.Type()
@@ -81,7 +86,10 @@ func (c *Container) autowired(val reflect.Value) {
 		kind := field.Kind()
 		if kind == reflect.Ptr || kind == reflect.Interface {
 			autowired := fieldType.Tag.Get("autowired")
-			if field.CanSet() && field.IsNil() && autowired != "" {
+			if autowired != True && autowired != False {
+				autowired = c.defaultAutowired
+			}
+			if field.CanSet() && field.IsNil() && autowired != False {
 				qualifier := fieldType.Tag.Get("qualifier")
 				key := qualifier
 				if key == "" {
@@ -100,13 +108,13 @@ func (c *Container) autowired(val reflect.Value) {
 						rv = reflect.New(fieldType.Type.Elem())
 					}
 					field.Set(rv)
-					c.addBean(key, autowired, rv, fieldType.Type)
+					c.addBean(key, rv, fieldType.Type)
 				}
-			}
-			if kind == reflect.Interface {
-				c.autowired(field.Elem().Elem())
-			} else {
-				c.autowired(field.Elem())
+				if kind == reflect.Interface {
+					c.autowired(field.Elem().Elem())
+				} else {
+					c.autowired(field.Elem())
+				}
 			}
 		} else if kind == reflect.Struct {
 			c.autowired(field)

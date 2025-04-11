@@ -3,7 +3,6 @@ package ioc
 import "reflect"
 
 type Bean struct {
-	tag            string
 	name           string
 	value          any
 	handles        []Handle
@@ -15,10 +14,6 @@ type Bean struct {
 func (b *Bean) Use(middlewares ...Handle) *Bean {
 	b.handles = append(b.handles, middlewares...)
 	return b
-}
-
-func (b *Bean) Tag() string {
-	return b.tag
 }
 
 func (b *Bean) Name() string {
